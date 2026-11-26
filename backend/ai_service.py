@@ -5,16 +5,19 @@ from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+import time
 
 load_dotenv(dotenv_path="../.env")
 
 raw_key = os.getenv("GEMINI_API_KEY", "").strip().strip('"').strip("'")
-client = genai.Client(api_key=raw_key) if raw_key else None
+client = genai.Client(
+    api_key=raw_key,
+    http_options=types.HttpOptions(timeout=15000),
+) if raw_key else None
 
 MODELOS_DISPONIBLES = [
-    "gemini-3.8-flash",
-    "gemini-2.5-flash-lite",
     "gemini-3.5-flash-lite",
+    "gemini-3.8-flash"
 ]
 
 
@@ -26,6 +29,8 @@ class LoteDetectadoIA(BaseModel):
     urgencia: str = Field(description="Alta (perecedero rápido/lácteo/carne), Media (panadería/fruta) o Baja")
     consejo_conservacion: str = Field(description="Instrucción breve de conservación o manejo seguro (máx 12 palabras)")
     horas_para_vencer: int = Field(description="Horas estimadas límite para recogerlo hoy (ej. 2 o 3)")
+    hora_limite_reloj: str = Field(description="Hora del reloj que menciona la nota, en formato HH:MM de 24 horas (ej. 08:00). Cadena vacía si no menciona ninguna")
+    hora_ambigua: bool = Field(description="true si la nota da la hora sin decir mañana, tarde o noche (ej. 'antes de las 8')")
 
 
 class RespuestaParseoIA(BaseModel):
@@ -39,9 +44,43 @@ def _respaldo_local(texto_libre: str) -> list[dict]:
         "cantidad": 1,
         "unidad": "lote",
         "urgencia": "Media",
+        "respaldo": True,
         "consejo_conservacion": "Mantener en lugar fresco y consumir hoy.",
         "hora_limite": (datetime.now() + timedelta(hours=2)).isoformat()
     }]
+
+def _calcular_limite(item: dict) -> datetime:
+    """Calcula la hora límite en código. Si la hora es ambigua, prueba mañana y tarde y toma la más próxima."""
+    ahora = datetime.now()
+    reloj = (item.get("hora_limite_reloj") or "").strip()
+    if reloj:
+        try:
+            h, m = (int(x) for x in reloj.split(":"))
+            horas = [h, h + 12] if item.get("hora_ambigua") and 1 <= h < 12 else [h]
+            candidatos = []
+            for hh in horas:
+                for dias in (0, 1):
+                    c = (ahora + timedelta(days=dias)).replace(hour=hh, minute=m, second=0, microsecond=0)
+                    if c > ahora:
+                        candidatos.append(c)
+            if candidatos:
+                return min(candidatos)
+        except (ValueError, TypeError):
+            pass
+    horas = max(1, min(item.get("horas_para_vencer", 2), 24))
+    return ahora + timedelta(hours=horas)    
+
+def _llamar_gemini(modelo, prompt, config):
+    """Llama a Gemini; si el modelo está saturado (503), reintenta una vez."""
+    for intento in range(2):
+        try:
+            return client.models.generate_content(model=modelo, contents=prompt, config=config)
+        except Exception as e:
+            saturado = "503" in str(e) or "UNAVAILABLE" in str(e)
+            if saturado and intento == 0:
+                time.sleep(1.5)
+                continue
+            raise
 
 
 def parsear_nota_excedente(texto_libre: str) -> list[dict]:
@@ -50,17 +89,20 @@ def parsear_nota_excedente(texto_libre: str) -> list[dict]:
         return _respaldo_local(texto_libre)
 
     prompt = (
-        f"Eres un asistente operativo de una cafetería que registra excedentes al cierre. "
-        f"Extrae los alimentos sobrantes de esta nota del encargado: '{texto_libre}'. "
-        f"Si no menciona tiempo límite, asume 2 horas para alimentos de urgencia Alta y 4 horas para Media/Baja."
-    )
+    f"Eres un asistente operativo de una cafetería que registra excedentes al cierre. "
+    f"Extrae los alimentos sobrantes de esta nota del encargado: '{texto_libre}'. "
+    f"Si la nota menciona una hora del reloj (por ejemplo 'antes de las 8'), ponla en hora_limite_reloj "
+    f"en formato HH:MM de 24 horas y marca hora_ambigua en true si no dice mañana, tarde o noche. "
+    f"Si no menciona ninguna hora, deja hora_limite_reloj vacío y estima horas_para_vencer: "
+    f"2 horas para urgencia Alta y 4 para Media o Baja."
+    )   
 
     for modelo in MODELOS_DISPONIBLES:
         try:
-            response = client.models.generate_content(
-                model=modelo,
-                contents=prompt,
-                config=types.GenerateContentConfig(
+            response = _llamar_gemini(
+            modelo,
+            prompt,
+            types.GenerateContentConfig(
                     response_mime_type="application/json",
                     response_schema=RespuestaParseoIA,
                     temperature=0.2,
@@ -69,8 +111,7 @@ def parsear_nota_excedente(texto_libre: str) -> list[dict]:
             data = json.loads(response.text)
             resultados = []
             for item in data.get("lotes", []):
-                horas = max(1, min(item.get("horas_para_vencer", 2), 24))
-                item["hora_limite"] = (datetime.now() + timedelta(hours=horas)).isoformat()
+                item["hora_limite"] = _calcular_limite(item).isoformat()
                 resultados.append(item)
             if resultados:
                 return resultados
@@ -96,10 +137,10 @@ def generar_recomendaciones_merma(estadisticas_texto: str) -> list[str]:
 
     for modelo in MODELOS_DISPONIBLES:
         try:
-            response = client.models.generate_content(
-                model=modelo,
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.4),
+            response = _llamar_gemini(
+            modelo,
+            prompt,
+            types.GenerateContentConfig(temperature=0.4),
             )
             lineas = [l.strip("-•*123. ").split("(")[0].strip() for l in response.text.splitlines() if l.strip()]
             if lineas:
