@@ -1,3 +1,4 @@
+import re
 import os
 import json
 from datetime import datetime, timedelta
@@ -89,13 +90,16 @@ def generar_recomendaciones_merma(estadisticas_texto: str) -> list[str]:
         ]
 
     prompt = (
-    "Analiza estos datos de excedentes de una cafetería y devuelve exactamente 3 observaciones "
-    "cortas (máximo 20 palabras cada una), basadas SOLO en los datos dados. "
-    "No inventes cifras, metas ni porcentajes que no se desprendan de los datos. "
-    "Si hay pocos datos para concluir algo (por ejemplo, un solo lote por producto), "
-    "dilo en la observación y sugiere qué dato falta registrar.\n"
-    f"{estadisticas_texto}"
-)
+        "Analiza estos datos de excedentes de una cafetería y devuelve exactamente 3 observaciones, "
+        "una por línea, sin introducción ni numeración y de máximo 20 palabras cada una. "
+        "Básate SOLO en los datos dados. No inventes cifras, metas ni porcentajes que no se desprendan de ellos. "
+        "Cuando un lote venza sin recogerse, escribe que expiró sin recogerse y no digas que se desperdició "
+        "ni que se tiró, porque no sabemos qué pasó con el alimento. "
+        "Solo sugiere registrar datos que el sistema ya maneja: hora de publicación, responsable, "
+        "motivo de no recogida o cantidad recogida. No sugieras precios. "
+        "Si hay pocos datos para concluir algo, dilo.\n"
+        f"{estadisticas_texto}"
+    )
 
     for modelo in MODELOS_DISPONIBLES:
         try:
@@ -104,7 +108,7 @@ def generar_recomendaciones_merma(estadisticas_texto: str) -> list[str]:
                 contents=prompt,
                 config=types.GenerateContentConfig(temperature=0.4),
             )
-            lineas = [l.strip("-•*123. ").split("(")[0].strip() for l in response.text.splitlines() if l.strip()]
+            lineas = [re.sub(r"^\s*(?:[-•*]|\d+[.)])\s*", "", l).strip() for l in response.text.splitlines() if l.strip()]
             if lineas:
                 return lineas[:3]
         except Exception as e:
