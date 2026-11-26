@@ -96,6 +96,7 @@ def parsear_nota_excedente(texto_libre: str) -> list[dict]:
     f"en formato HH:MM de 24 horas y marca hora_ambigua en true si no dice mañana, tarde o noche. "
     f"Si no menciona ninguna hora, deja hora_limite_reloj vacío y estima horas_para_vencer: "
     f"2 horas para urgencia Alta y 4 para Media o Baja."
+        " Si la nota no menciona alimentos sobrantes, devuelve la lista de lotes vacía."
     )   
 
     for modelo in MODELOS_DISPONIBLES:
@@ -114,8 +115,7 @@ def parsear_nota_excedente(texto_libre: str) -> list[dict]:
             for item in data.get("lotes", []):
                 item["hora_limite"] = _calcular_limite(item).isoformat()
                 resultados.append(item)
-            if resultados:
-                return resultados
+            return resultados  # lista vacía si la nota no menciona alimentos
         except Exception as e:
             print(f"[AVISO GEMINI {modelo}]: {e}")
 
