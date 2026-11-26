@@ -41,3 +41,6 @@ form button{grid-column:1/-1}
 .giro{display:inline-block;width:14px;height:14px;margin-right:8px;border:2px solid var(--linea);border-top-color:var(--hoja);border-radius:50%;animation:g .8s linear infinite;vertical-align:-2px}
 @keyframes g{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){.giro{animation:none}}
+
+.rejilla>p,.resumen>p{grid-column:1/-1}
+.bloque .resumen{margin-top:8px}

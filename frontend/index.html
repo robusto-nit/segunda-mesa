@@ -33,7 +33,7 @@
       <textarea id="nota" rows="2" placeholder="Sobraron 12 tortas de jamón y 3 litros de café, recoger antes de las 8"></textarea>
       <button type="button" id="btn-ia" class="sec">Completar con IA</button>
     </div>
-    <form id="form-lote">
+    <form id="form-lote" autocomplete="off">
       <input type="hidden" name="categoria">
       <label>Alimento <input name="alimento" required minlength="2"></label>
       <label>Cantidad <input name="cantidad_total" type="number" min="1" required></label>

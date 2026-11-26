@@ -20,11 +20,11 @@ function restante(h) {
 }
 
 /* Disponibles */
-async function cargarLotes() {
+async function cargarLotes(silencioso) {
   const el = $("#lista-lotes");
-  el.innerHTML = '<p class="vacio">Cargando…</p>';
+  if (!silencioso) el.innerHTML = '<p class="vacio">Cargando…</p>';
   try {
-    const ls = lista(await Api.lotes());
+    const ls = lista(await Api.lotes()).filter(l => new Date(l.hora_limite) > Date.now());
     el.innerHTML = ls.length ? ls.map(l => {
       const disp = l.cantidad_disponible ?? l.disponible ?? l.cantidad_total;
       const [txt, urg] = restante(l.hora_limite);
@@ -37,7 +37,7 @@ async function cargarLotes() {
         <div class="fila"><input type="number" min="1" max="${esc(disp)}" value="1" aria-label="Cantidad a reservar">
         <button data-reservar>Reservar</button></div></article>`;
     }).join("") : '<p class="vacio">No hay excedentes publicados. Publica el primero desde la pestaña Publicar.</p>';
-  } catch (e) { el.innerHTML = ""; aviso(e.message, true); }
+  } catch (e) { if (!silencioso) { el.innerHTML = ""; aviso(e.message, true); } }
 }
 $("#lista-lotes").addEventListener("click", e => {
   const b = e.target.closest("[data-reservar]"); if (!b) return;
@@ -45,8 +45,14 @@ $("#lista-lotes").addEventListener("click", e => {
   if (nombre.length < 2) return aviso("Escribe tu nombre arriba para poder reservar", true);
   localStorage.setItem("nombre", nombre);
   accion(() => Api.reservar({ lote_id: +c.dataset.id, receptor_nombre: nombre, cantidad_reservada: +c.querySelector("input").value }),
-    "Reserva creada", cargarLotes);
+    "Reserva creada", () => cargarLotes());
 });
+// Cada 30 s se actualizan cuentas regresivas y lotes vencidos, salvo que la persona esté escribiendo
+setInterval(() => {
+  const vista = location.hash.slice(1) || "disponibles";
+  const foco = document.activeElement;
+  if (vista === "disponibles" && !(foco && foco.closest && foco.closest("#lista-lotes"))) cargarLotes(true);
+}, 30000);
 
 /* Publicar */
 $("#form-lote").addEventListener("submit", e => {
@@ -87,16 +93,22 @@ async function cargarReservas() {
   const el = $("#lista-reservas");
   el.innerHTML = '<p class="vacio">Cargando…</p>';
   try {
-    const rs = lista(await Api.reservas());
-    el.innerHTML = rs.length ? rs.map(r => {
+    const [rs, ls] = await Promise.all([Api.reservas(), Api.todosLotes()]);
+    const lotes = Object.fromEntries(lista(ls).map(l => [l.id, l]));
+    const nombre = $("#nombre").value.trim();
+    const filtra = nombre.length >= 2;
+    const mias = lista(rs).filter(r => !filtra || (r.receptor_nombre || "").toLowerCase() === nombre.toLowerCase());
+    const nota = filtra ? `<p class="vacio">Reservas de ${esc(nombre)}. Borra el nombre de arriba para ver todas.</p>` : "";
+    el.innerHTML = nota + (mias.length ? mias.map(r => {
+      const l = lotes[r.lote_id] || {};
       const abierta = !/cancel|recog|confirm/i.test(r.estado || "");
       return `<article class="lote" data-id="${esc(r.id)}">
-        <h3>Lote ${esc(r.lote_id)}: ${esc(r.cantidad_reservada)} reservadas</h3>
+        <h3>${esc(l.alimento || "Lote " + r.lote_id)}: ${esc(r.cantidad_reservada)} ${esc(l.unidad || "")} reservadas</h3>
         <p>${esc(r.receptor_nombre)}</p>
-        <p class="estado">${esc(r.estado || "")}${r.cantidad_recogida != null ? ` · Recogido: ${esc(r.cantidad_recogida)}` : ""}</p>
+        <p class="estado">${esc(r.estado || "")}${r.cantidad_recogida != null && !abierta ? ` · Recogido: ${esc(r.cantidad_recogida)}` : ""}</p>
         ${abierta ? `<div class="fila"><input type="number" min="0" value="${esc(r.cantidad_reservada)}" aria-label="Cantidad recogida">
         <button data-confirmar>Confirmar recogida</button><button class="peligro" data-cancelar>Cancelar</button></div>` : ""}</article>`;
-    }).join("") : '<p class="vacio">Aún no hay reservas.</p>';
+    }).join("") : '<p class="vacio">No hay reservas todavía.</p>');
   } catch (e) { el.innerHTML = ""; aviso(e.message, true); }
 }
 $("#lista-reservas").addEventListener("click", e => {
@@ -106,8 +118,9 @@ $("#lista-reservas").addEventListener("click", e => {
   if (e.target.closest("[data-cancelar]"))
     accion(() => Api.cancelar(id), "Reserva cancelada", cargarReservas);
 });
+$("#nombre").addEventListener("change", () => { if (location.hash === "#reservas") cargarReservas(); });
 
-/* Resumen: primero los números, luego la IA aparte */
+/* Resumen: primero los números, luego la IA aparte. Cada unidad se calcula por separado */
 const ETIQ = {
   total_publicado: "Publicado",
   reservado_pendiente: "Reservado, sin recoger",
@@ -115,13 +128,18 @@ const ETIQ = {
   expirado_sin_rescate: "Expirado sin rescate",
   tasa_rescate_porcentaje: "Tasa de rescate (%)",
 };
-const metricas = m => Object.entries(m || {})
+const metricas = m => Object.entries(m || {}).filter(([k]) => k !== "unidad")
   .map(([k, v]) => `<div class="dato"><b>${esc(v)}</b><span>${esc(ETIQ[k] || tit(k))}</span></div>`).join("");
-
+function bloques(d) {
+  if (!d.metricas_por_unidad) return metricas(d.metricas);  // respuesta antigua del backend
+  if (!d.metricas_por_unidad.length) return '<p class="vacio">Aún no hay excedentes publicados.</p>';
+  return d.metricas_por_unidad.map(u => `<div class="bloque"><h3>${esc(u.unidad)}</h3><div class="resumen">${metricas(u)}</div></div>`).join("")
+    + '<p class="vacio">Cada unidad se calcula por separado: no se suman piezas con litros. Los números son al corte de este momento.</p>';
+}
 async function cargarResumen() {
   const el = $("#resumen-datos"), ia = $("#resumen-ia");
   ia.innerHTML = ""; el.innerHTML = '<p class="vacio">Cargando…</p>';
-  try { el.innerHTML = metricas((await Api.resumen(false)).metricas); }
+  try { el.innerHTML = bloques(await Api.resumen(false)); }
   catch (e) { el.innerHTML = ""; return aviso(e.message, true); }
   ia.innerHTML = '<p class="vacio" role="status"><span class="giro"></span>La IA está redactando observaciones…</p>';
   try {
