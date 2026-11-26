@@ -89,10 +89,13 @@ def generar_recomendaciones_merma(estadisticas_texto: str) -> list[str]:
         ]
 
     prompt = (
-        "Analiza estos datos reales de excedentes y mermas de una cafetería y devuelve exactamente "
-        "3 recomendaciones concretas, accionables y cortas (máximo 20 palabras cada una) para reducir "
-        f"el desperdicio en los próximos días:\n{estadisticas_texto}"
-    )
+    "Analiza estos datos de excedentes de una cafetería y devuelve exactamente 3 observaciones "
+    "cortas (máximo 20 palabras cada una), basadas SOLO en los datos dados. "
+    "No inventes cifras, metas ni porcentajes que no se desprendan de los datos. "
+    "Si hay pocos datos para concluir algo (por ejemplo, un solo lote por producto), "
+    "dilo en la observación y sugiere qué dato falta registrar.\n"
+    f"{estadisticas_texto}"
+)
 
     for modelo in MODELOS_DISPONIBLES:
         try:
