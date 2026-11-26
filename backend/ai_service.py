@@ -136,8 +136,10 @@ def generar_recomendaciones_merma(estadisticas_texto: str) -> list[str]:
         "Básate SOLO en los datos dados. No inventes cifras, metas ni porcentajes que no se desprendan de ellos. "
         "Cuando un lote venza sin recogerse, escribe que expiró sin recogerse y no digas que se desperdició "
         "ni que se tiró, porque no sabemos qué pasó con el alimento. "
-        "Solo sugiere registrar datos que el sistema ya maneja: hora de publicación, responsable, "
-        "motivo de no recogida o cantidad recogida. No sugieras precios. "
+        "El sistema ya registra la hora de publicación, el responsable y las cantidades recogidas: "
+        "no sugieras registrar eso. Si hace falta pedir un dato nuevo, pide solo el motivo por el que no se recogió un lote. "
+        "No sugieras precios. Distingue los lotes que expiraron con unidades sin recoger "
+        "de los que no tuvieron ninguna recogida. "
         "Si hay pocos datos para concluir algo, dilo.\n"
         f"{estadisticas_texto}"
     )

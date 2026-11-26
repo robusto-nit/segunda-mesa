@@ -262,8 +262,12 @@ def obtener_resumen(incluir_ia: bool = False, db: sqlite3.Connection = Depends(g
     respuesta = {"metricas_por_unidad": list(por_unidad.values())}
 
     if incluir_ia and lotes:
+        recogido_por_lote = {}
+        for r in reservas:
+            if r["estado"] == "confirmado":
+                recogido_por_lote[r["lote_id"]] = recogido_por_lote.get(r["lote_id"], 0) + r["cantidad_recogida"]
         detalle = "\n".join([
-            f"- {l['alimento']} ({l['categoria']}): publicados {l['cantidad_total']} {l['unidad']}, disponibles sin recoger {l['cantidad_disponible']}, estado {l['estado']}"
+            f"- {l['alimento']} ({l['categoria']}): publicados {l['cantidad_total']} {l['unidad']}, recogidos {recogido_por_lote.get(l['id'], 0)}, disponibles sin recoger {l['cantidad_disponible']}, estado {l['estado']}"
             for l in lotes[-15:]
         ])
         respuesta["recomendaciones_ia"] = generar_recomendaciones_merma(detalle)
