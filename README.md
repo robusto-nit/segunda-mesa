@@ -127,9 +127,9 @@ Abre http://localhost:5500.
 | Integrante | Rol | Perfil |
 |---|---|---|
 | Roberto Reza | Frontend (interfaz web) | [robusto-nit](https://github.com/robusto-nit) |
-| _Nombre_ | Backend (API y base de datos) | _Enlace a GitHub_ |
-| _Nombre_ | _Rol_ | [OrphanDrake](https://github.com/OrphanDrake) |
-| _Nombre_ | _Rol_ | _Enlace a GitHub_ |
+| Adrian Alba | Backend (API y base de datos) | [ADRIAN ALBA MIRANDA](https://github.com/AlbaYS11) |
+| Jorge | Documentacion | [OrphanDrake](https://github.com/OrphanDrake) |
+| Erik Rivera | Documentacion | [Erick Ri](https://github.com/Luz-siceda) |
 
 ## Plan de negocios y fuentes
 
