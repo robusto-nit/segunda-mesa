@@ -237,22 +237,29 @@ def obtener_resumen(incluir_ia: bool = False, db: sqlite3.Connection = Depends(g
     lotes = [dict(f) for f in db.execute("SELECT * FROM lotes_excedentes").fetchall()]
     reservas = [dict(f) for f in db.execute("SELECT * FROM reservas").fetchall()]
 
-    total_publicado = sum(l["cantidad_total"] for l in lotes)
-    total_reservado_activo = sum(r["cantidad_reservada"] for r in reservas if r["estado"] == "reservado")
-    total_recogido = sum(r["cantidad_recogida"] for r in reservas if r["estado"] == "confirmado")
-    total_vencido_sin_recoger = sum(l["cantidad_disponible"] for l in lotes if l["estado"] == "vencido")
+    por_unidad = {}
+    unidad_de = {}
+    for l in lotes:
+        clave = l["unidad"].strip().lower()
+        unidad_de[l["id"]] = clave
+        u = por_unidad.setdefault(clave, {
+            "unidad": l["unidad"].strip(), "total_publicado": 0, "reservado_pendiente": 0,
+            "efectivamente_recogido": 0, "expirado_sin_rescate": 0})
+        u["total_publicado"] += l["cantidad_total"]
+        if l["estado"] == "vencido":
+            u["expirado_sin_rescate"] += l["cantidad_disponible"]
+    for r in reservas:
+        u = por_unidad.get(unidad_de.get(r["lote_id"]))
+        if not u:
+            continue
+        if r["estado"] == "reservado":
+            u["reservado_pendiente"] += r["cantidad_reservada"]
+        elif r["estado"] == "confirmado":
+            u["efectivamente_recogido"] += r["cantidad_recogida"]
+    for u in por_unidad.values():
+        u["tasa_rescate_porcentaje"] = round(u["efectivamente_recogido"] / u["total_publicado"] * 100, 1) if u["total_publicado"] > 0 else 0.0
 
-    tasa_rescate = round((total_recogido / total_publicado * 100), 1) if total_publicado > 0 else 0.0
-
-    respuesta = {
-        "metricas": {
-            "total_publicado": total_publicado,
-            "reservado_pendiente": total_reservado_activo,
-            "efectivamente_recogido": total_recogido,
-            "expirado_sin_rescate": total_vencido_sin_recoger,
-            "tasa_rescate_porcentaje": tasa_rescate
-        }
-    }
+    respuesta = {"metricas_por_unidad": list(por_unidad.values())}
 
     if incluir_ia and lotes:
         detalle = "\n".join([
