@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Segunda Mesa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/estilos.css">
+</head>
+<body>
+<header>
+  <h1>Segunda Mesa</h1>
+  <label class="nombre">Tu nombre <input id="nombre" autocomplete="name" placeholder="Para reservar"></label>
+  <nav>
+    <a href="#disponibles">Disponibles</a>
+    <a href="#publicar">Publicar</a>
+    <a href="#reservas">Mis reservas</a>
+    <a href="#resumen">Resumen</a>
+  </nav>
+</header>
+<div id="aviso" role="status" hidden></div>
+<main>
+  <section id="disponibles" hidden>
+    <h2>Lo que sobra hoy</h2>
+    <div id="lista-lotes" class="rejilla"></div>
+  </section>
+
+  <section id="publicar" hidden>
+    <h2>Publicar un excedente</h2>
+    <div class="nota">
+      <label for="nota">Describe lo que sobró con tus palabras</label>
+      <textarea id="nota" rows="2" placeholder="Sobraron 12 tortas de jamón y 3 litros de café, recoger antes de las 8"></textarea>
+      <button type="button" id="btn-ia" class="sec">Completar con IA</button>
+    </div>
+    <form id="form-lote" autocomplete="off">
+      <input type="hidden" name="categoria">
+      <label>Alimento <input name="alimento" required minlength="2"></label>
+      <label>Cantidad <input name="cantidad_total" type="number" min="1" required></label>
+      <label>Unidad <input name="unidad" required placeholder="piezas, litros, kg"></label>
+      <label>Hora límite de recogida <input name="hora_limite" type="datetime-local" required></label>
+      <label>Responsable <input name="responsable" required minlength="2"></label>
+      <label>Lugar <input name="lugar" value="Cafetería Principal"></label>
+      <label>Urgencia <select name="urgencia"><option>Baja</option><option selected>Media</option><option>Alta</option></select></label>
+      <label>Consejo de conservación <input name="consejo_conservacion"></label>
+      <button type="submit">Publicar excedente</button>
+    </form>
+  </section>
+
+  <section id="reservas" hidden>
+    <h2>Reservas</h2>
+    <div id="lista-reservas" class="rejilla"></div>
+  </section>
+
+  <section id="resumen" hidden>
+    <h2>Resumen</h2>
+    <div id="resumen-datos" class="resumen"></div>
+    <div id="resumen-ia"></div>
+  </section>
+</main>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
